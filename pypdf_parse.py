@@ -3,8 +3,8 @@ import sqlite3
 from io import BytesIO
 from PyPDF2 import PdfReader
 
-COMPANY = os.environ.get('COMPANY') #"BEKKULISHA"
-COMPANY_ID = os.environ.get('COMPANY_ID') #"041017601713"
+COMPANY = os.environ.get('COMPANY')
+COMPANY_ID = os.environ.get('COMPANY_ID')
 MONTH_PASS_PRICE = "1499"
 DAY_PASS_PRICE = "499"
 
@@ -18,23 +18,31 @@ def verify_pdf(pdf_bytes):
     for page in reader.pages:
         text = page.extract_text()
         lines = text.split("\n")
-        if len(lines) < 8:
+
+        company_name = ""
+        vendor_id = ""
+        payment = ""
+        customer_name = ""
+        transaction_time = ""
+        transaction_id = ""
+
+        try:
+            company_name = lines[1]
+            vendor_id = lines[5].split(" ")[2]
+            payment = lines[3].split(" ")[0]
+            customer_name = lines[6]
+            transaction_time = lines[7]
+            transaction_id = lines[4].split(" ")[2]
+        except:
             return {"approved": False,
                     "reason": "Wrong PDF", 
                     "days_added": 0, 
-                    "company_name": "",
-                    "vendor_id": "",
-                    "payment": "", 
-                    "transaction_id": "",
-                    "customer_name": "",
-                    "transaction_time": ""}
-
-        company_name = lines[1]
-        vendor_id = lines[5].split(" ")[2]
-        payment = lines[3].split(" ")[0]
-        customer_name = lines[6]
-        transaction_time = lines[7]
-        transaction_id = lines[4].split(" ")[2]
+                    "company_name": company_name,
+                    "vendor_id": vendor_id,
+                    "payment": payment, 
+                    "transaction_id": transaction_id,
+                    "customer_name": customer_name,
+                    "transaction_time": transaction_time}
         
         # Check DB for repetition
         db = sqlite3.connect('records_and_tasks.db')
