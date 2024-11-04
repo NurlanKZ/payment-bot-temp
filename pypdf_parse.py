@@ -5,7 +5,7 @@ from PyPDF2 import PdfReader
 
 COMPANY = os.environ.get('COMPANY')
 COMPANY_ID = os.environ.get('COMPANY_ID')
-MONTH_PASS_PRICE = "1 499"
+MONTH_PASS_PRICE = ["1 490", "1 499", "1 500"]
 DAY_PASS_PRICE = "499"
 
 def verify_pdf(pdf_bytes):
@@ -65,7 +65,7 @@ def verify_pdf(pdf_bytes):
 
         # Check Company Credentials First
         if company_name == COMPANY and vendor_id == COMPANY_ID:
-            if MONTH_PASS_PRICE in payment:
+            if payment in MONTH_PASS_PRICE:
                 return {"approved": True, 
                         "reason": "Passed 1 month verification", 
                         "days_added": 30, 
