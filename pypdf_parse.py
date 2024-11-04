@@ -67,7 +67,7 @@ def verify_pdf(pdf_bytes):
         if company_name == COMPANY and vendor_id == COMPANY_ID:
             if MONTH_PASS_PRICE in payment:
                 return {"approved": True, 
-                        "reason": "Verified", 
+                        "reason": "Passed 1 month verification", 
                         "days_added": 30, 
                         "company_name": company_name,
                         "vendor_id": vendor_id,
@@ -77,7 +77,7 @@ def verify_pdf(pdf_bytes):
                         "transaction_time": transaction_time}
             elif DAY_PASS_PRICE in payment:
                 return {"approved": True,
-                        "reason": "Verified", 
+                        "reason": "Passed 1 day verification", 
                         "days_added": 1, 
                         "company_name": company_name,
                         "vendor_id": vendor_id,
