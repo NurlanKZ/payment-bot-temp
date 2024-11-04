@@ -5,7 +5,7 @@ from PyPDF2 import PdfReader
 
 COMPANY = os.environ.get('COMPANY')
 COMPANY_ID = os.environ.get('COMPANY_ID')
-MONTH_PASS_PRICE = "1499"
+MONTH_PASS_PRICE = "1 499"
 DAY_PASS_PRICE = "499"
 
 def verify_pdf(pdf_bytes):
@@ -29,7 +29,7 @@ def verify_pdf(pdf_bytes):
         try:
             company_name = lines[1]
             vendor_id = lines[5].split(" ")[2]
-            payment = lines[3].split(" ")[0]
+            payment = lines[3][:-2]
             customer_name = lines[6]
             transaction_time = lines[7]
             transaction_id = lines[4].split(" ")[2]
