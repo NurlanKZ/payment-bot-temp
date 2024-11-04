@@ -139,7 +139,7 @@ async def remind_user(context: ContextTypes.DEFAULT_TYPE) -> None:
                 InlineKeyboardButton("Обновить подписку", callback_data="0"),
             ],]))
     if context.job.data == 24:
-        context.job_queue.run_once(remind_user, 60*60, name=context.job.name, data=1)
+        context.job_queue.run_once(remind_user, SECONDS_IN_DAY-3600, name=context.job.name, data=1)
 
 async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.chat.type == update.message.chat.PRIVATE:
@@ -176,9 +176,10 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 ''', (str(update.message.from_user.id), update.message.date.timestamp() + result['days_added']*SECONDS_IN_DAY))
                 db.commit()
                 # Schedule a job
-                context.job_queue.run_once(kick_user, result['days_added']*SECONDS_IN_DAY, name=str(update.message.from_user.id))
+                seconds_added = result['days_added']*SECONDS_IN_DAY
+                context.job_queue.run_once(kick_user, seconds_added, name=str(update.message.from_user.id))
                 reminder_hours = -(-result['days_added']*4 // 5) # Used a Math.ceil alternative here
-                context.job_queue.run_once(remind_user, reminder_hours*3600, name=str(update.message.from_user.id), data=reminder_hours)
+                context.job_queue.run_once(remind_user, seconds_added-reminder_hours*3600, name=str(update.message.from_user.id), data=reminder_hours)
 
                 # Generate an invite link
                 generated_link = await context.bot.create_chat_invite_link(CHANNEL_ID, expire_date=int(update.message.date.timestamp())+result['days_added']*SECONDS_IN_DAY, member_limit=1)
@@ -236,7 +237,7 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 db.commit()
                 db.close()
         else:
-            await update.message.reply_text("Төлемді растайтын құжатты PDF форматында жіберуіңізді өтінеміз.\n\nПожалуйста, отправьте квитанцию о платеже в формате PDF.")
+            await update.message.reply_text("Төлемді растайтын құжатты PDF форматында жіберуіңізді өтінеміз.\n\nПожалуйста, отправьте квитанцию об оплате в формате PDF.")
 
 if __name__ == '__main__':
     """Run bot."""
