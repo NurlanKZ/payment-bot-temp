@@ -1,6 +1,6 @@
 import os
-import sqlite3
 import pandas as pd
+from supabase import create_client, Client
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
@@ -13,6 +13,9 @@ ADMIN_ID_3 = os.environ.get('ADMIN_ID_3')
 ADMIN_IDS = [ADMIN_ID_1, ADMIN_ID_2, ADMIN_ID_3]
 CHANNEL_ID = os.environ.get('CHANNEL_ID')
 PAYMENT_URL = os.environ.get('PAYMENT_URL')
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
 SECONDS_IN_DAY = 86400
 
 
@@ -92,10 +95,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.chat.type == 'private' and str(update.message.from_user.id) in ADMIN_IDS:
-        db = sqlite3.connect('records_and_tasks.db')
-        cursor = db.cursor()
-        cursor.execute("SELECT * FROM Records ORDER BY timestamp DESC")
-        records = cursor.fetchall()
+        response = supabase.table("records").select("*").order("timestamp", desc=True).limit(500).execute()
+        records = response.data
 
         # save records to an excel file and send it
         df = pd.DataFrame(records)
@@ -103,14 +104,11 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         df.to_excel(file_name, index=False)
         with open(file_name, 'rb') as f:
             await context.bot.send_document(update.message.chat.id, f, caption="Verification logs.")
-        db.close()
 
 async def get_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.chat.type == update.message.chat.PRIVATE and str(update.message.from_user.id) in ADMIN_IDS:
-        db = sqlite3.connect('records_and_tasks.db')
-        cursor = db.cursor()
-        cursor.execute("SELECT * FROM Tasks")
-        tasks = cursor.fetchall()
+        response = supabase.table("tasks").select("*").limit(500).execute()
+        tasks = response.data
 
         # save tasks to an excel file and send it
         df = pd.DataFrame(tasks)
@@ -118,7 +116,11 @@ async def get_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         df.to_excel(file_name, index=False)
         with open(file_name, 'rb') as f:
             await context.bot.send_document(update.message.chat.id, f, caption="Scheduled tasks.")
-        db.close()
+
+async def get_member_count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message.chat.type == update.message.chat.PRIVATE:         
+        member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
+        print(member_count)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.chat.type == update.message.chat.PRIVATE:
@@ -152,7 +154,7 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             downloaded_file = await file.download_as_bytearray()
 
             # Verify the PDF
-            result = verify_pdf(downloaded_file)
+            result = verify_pdf(downloaded_file, supabase)
             if result['approved']:
                 # Schedule user kick based on result['days_added']
 
@@ -163,18 +165,16 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     for job in current_jobs:
                         job.schedule_removal()
                 # also clear tasks db
-                db = sqlite3.connect('records_and_tasks.db')
-                cursor = db.cursor()
-                cursor.execute('''
-                    DELETE FROM Tasks WHERE telegram_user_id = ?
-                ''', (str(update.message.from_user.id),))
+                # CLEAR OLD KICKs and reminders
+                # Check to remove previously scheduled kicks
+                current_tasks = supabase.table("tasks").select("*").eq("telegram_user_id", str(update.message.from_user.id)).execute()
+                if current_tasks.data:
+                    for task in current_tasks.data:
+                        supabase.table("tasks").delete().match({"id": task["id"]}).execute()
 
                 # ADD NEW KICK
                 # Add to tasks db
-                cursor.execute('''
-                    INSERT INTO Tasks (telegram_user_id, sub_expiry_time) VALUES (?, ?)
-                ''', (str(update.message.from_user.id), update.message.date.timestamp() + result['days_added']*SECONDS_IN_DAY))
-                db.commit()
+                supabase.table("tasks").insert({"telegram_user_id": str(update.message.from_user.id), "sub_expiry_time": int(update.message.date.timestamp() + result['days_added']*SECONDS_IN_DAY)}).execute()
                 # Schedule a job
                 seconds_added = result['days_added']*SECONDS_IN_DAY
                 context.job_queue.run_once(kick_user, seconds_added, name=str(update.message.from_user.id))
@@ -191,24 +191,22 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 )
 
                 # Insert data into the table
-                cursor.execute('''
-                    INSERT INTO Records (telegram_user_id, telegram_username, timestamp, date_time, company_name, vendor_id, payment, transaction_id, customer_name, transaction_time, status, reason, invite_link)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-                ''', (update.message.from_user.id, 
-                      update.message.from_user.username,
-                      update.message.date.timestamp(), 
-                      (update.message.date + timedelta(hours=5)).strftime('%d-%m-%Y %H:%M:%S'), 
-                      result['company_name'],
-                      result['vendor_id'],
-                      result['payment'],
-                      result['transaction_id'],
-                      result['customer_name'],
-                      result['transaction_time'],
-                      'Approved',
-                      result['reason'],
-                      invite_link))
-                db.commit()
-                db.close()
+                data = {
+                    "telegram_user_id": update.message.from_user.id,
+                    "telegram_username": update.message.from_user.username,
+                    "timestamp": int(update.message.date.timestamp()),
+                    "date_time": (update.message.date + timedelta(hours=5)).strftime('%d-%m-%Y %H:%M:%S'),
+                    "company_name": result['company_name'],
+                    "vendor_id": result['vendor_id'],
+                    "payment": result['payment'],
+                    "transaction_id": result['transaction_id'],
+                    "customer_name": result['customer_name'],
+                    "transaction_time": result['transaction_time'],
+                    "status": 'Approved',
+                    "reason": result['reason'],
+                    "invite_link": invite_link
+                }
+                response = supabase.table("records").insert(data).execute()
             else:
                 await context.bot.edit_message_text(
                     chat_id=update.effective_chat.id,
@@ -216,26 +214,22 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     text="Сіз жіберген PDF-файл тексеруден өтпеді.\n\nОтправленный вами PDF-файл не прошел проверку.")
 
                 # Insert data into the table
-                db = sqlite3.connect('records_and_tasks.db')
-                cursor = db.cursor()
-                cursor.execute('''
-                    INSERT INTO Records (telegram_user_id, telegram_username, timestamp, date_time, company_name, vendor_id, payment, transaction_id, customer_name, transaction_time, status, reason, invite_link)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-                ''', (update.message.from_user.id, 
-                      update.message.from_user.username,
-                      update.message.date.timestamp(), 
-                      (update.message.date + timedelta(hours=5)).strftime('%d-%m-%Y %H:%M:%S'), 
-                      result['company_name'],
-                      result['vendor_id'],
-                      result['payment'],
-                      result['transaction_id'],
-                      result['customer_name'],
-                      result['transaction_time'],
-                      'Rejected',
-                      result['reason'],
-                      'No link'))
-                db.commit()
-                db.close()
+                data = {
+                    "telegram_user_id": update.message.from_user.id,
+                    "telegram_username": update.message.from_user.username,
+                    "timestamp": int(update.message.date.timestamp()),
+                    "date_time": (update.message.date + timedelta(hours=5)).strftime('%d-%m-%Y %H:%M:%S'),
+                    "company_name": result['company_name'],
+                    "vendor_id": result['vendor_id'],
+                    "payment": result['payment'],
+                    "transaction_id": result['transaction_id'],
+                    "customer_name": result['customer_name'],
+                    "transaction_time": result['transaction_time'],
+                    "status": 'Rejected',
+                    "reason": result['reason'],
+                    "invite_link": 'No link'
+                }
+                response = supabase.table("records").insert(data).execute()
         else:
             await update.message.reply_text("Төлемді растайтын құжатты PDF форматында жіберуіңізді өтінеміз.\n\nПожалуйста, отправьте квитанцию об оплате в формате PDF.")
 
@@ -244,72 +238,21 @@ if __name__ == '__main__':
     # Create the Application and pass it your bot's token.
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Connect to the database (creates if it doesn't exist)
-    db = sqlite3.connect('records_and_tasks.db')
-    cursor = db.cursor()
-
-    # Create a table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Records (
-            id INTEGER PRIMARY KEY,
-            telegram_user_id INTEGER,
-            telegram_username TEXT,
-            timestamp DATETIME,
-            date_time TEXT,
-            company_name TEXT,
-            vendor_id TEXT,
-            payment TEXT,
-            transaction_id TEXT,
-            customer_name TEXT,
-            transaction_time TEXT,
-            status TEXT,
-            reason TEXT,
-            invite_link TEXT
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Tasks (
-            id INTEGER PRIMARY KEY,
-            telegram_user_id TEXT,
-            sub_expiry_time DATETIME
-        )
-    ''')
-
-    cursor.execute('''
-            INSERT INTO Records (telegram_user_id, telegram_username, timestamp, date_time, company_name, vendor_id, payment, transaction_id, customer_name, transaction_time, status, reason, invite_link)
-            SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM Records);
-        ''', (0, 
-                'Username',
-                2147483647, 
-                'Time of verification', 
-                'Company name', 
-                'Vendor ID', 
-                'Payment', 
-                'Transaction ID', 
-                'Customer name', 
-                'Time of transaction',
-                'Status', 
-                'Reason', 
-                'Invite Link'))
-    db.commit()
-
-    cursor.execute("SELECT telegram_user_id, sub_expiry_time FROM Tasks")
-    tasks = cursor.fetchall()
+    response = supabase.table("tasks").select("telegram_user_id", "sub_expiry_time").execute()
+    tasks = response.data
     for task in tasks:
-        kick_time = task[1] - int(datetime.now().timestamp())
+        kick_time = task.get("sub_expiry_time") - int(datetime.now().timestamp())
         if kick_time > 0:
-            application.job_queue.run_once(kick_user, kick_time, name=task[0])
+            application.job_queue.run_once(kick_user, kick_time, name=task.get("telegram_user_id"))
             if kick_time > SECONDS_IN_DAY:
-                application.job_queue.run_once(remind_user, kick_time - SECONDS_IN_DAY, name=task[0], data=24)
+                application.job_queue.run_once(remind_user, kick_time - SECONDS_IN_DAY, name=task.get("telegram_user_id"), data=24)
             elif kick_time > 3600:
-                application.job_queue.run_once(remind_user, kick_time - 3600, name=task[0], data=1)
-
-    db.close()
+                application.job_queue.run_once(remind_user, kick_time - 3600, name=task.get("telegram_user_id"), data=1)
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('logs', get_logs))
     application.add_handler(CommandHandler('tasks', get_tasks))
+    application.add_handler(CommandHandler('membercount', get_member_count))
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_docs))
