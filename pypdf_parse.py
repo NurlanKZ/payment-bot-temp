@@ -48,7 +48,7 @@ def verify_pdf(pdf_bytes, supabase):
         response = supabase.table("records").select("transaction_id").eq("status", "Approved").execute()
         rows = response.data
         for row in rows:
-            if transaction_id == row["transaction_id"]:
+            if transaction_id == row.get("transaction_id"):
                 return {"approved": False,
                         "reason": "Repeated transaction ID", 
                         "days_added": 0, 
