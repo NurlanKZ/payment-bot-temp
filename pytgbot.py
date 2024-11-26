@@ -125,10 +125,10 @@ async def ban_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         sub_expiry_time_limit = 1732555800
 
         # Subquery: Get telegram_user_id values with fewer than 2 occurrences
-        subquery_result = supabase.table("tasks").select("telegram_user_id, count(telegram_user_id)").group("telegram_user_id").having("count(telegram_user_id) < 2").execute()
+        subquery_result = supabase.table("tasks").select("telegram_user_id, count(*)").group("telegram_user_id").having("count(*) < 2").execute()
 
         # Extract IDs from the subquery
-        non_unique_ids = [row["telegram_user_id"] for row in subquery_result.data]
+        # non_unique_ids = [row["telegram_user_id"] for row in subquery_result.data]
 
         await update.message.reply_text(len(subquery_result.data))
 
