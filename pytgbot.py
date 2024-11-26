@@ -122,19 +122,15 @@ async def ban_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
         # print(member_count)
 
-        sub_expiry_time_limit = 1732554000
+        sub_expiry_time_limit = 1732555800
 
         # Subquery: Get telegram_user_id values with fewer than 2 occurrences
-        subquery_result = supabase.table("tasks") \
-            .select("telegram_user_id, count(telegram_user_id)") \
-            .group("telegram_user_id") \
-            .having("count(telegram_user_id) < 2") \
-            .execute()
+        subquery_result = supabase.table("tasks").select("telegram_user_id, count(telegram_user_id)").group("telegram_user_id").having("count(telegram_user_id) < 2").execute()
 
         # Extract IDs from the subquery
         non_unique_ids = [row["telegram_user_id"] for row in subquery_result.data]
 
-        await update.message.reply_text(len(non_unique_ids))
+        await update.message.reply_text(len(subquery_result.data))
 
         # Final query: Filter tasks based on the subquery and `sub_expiry_time`
         # final_result = supabase.table("tasks") \
