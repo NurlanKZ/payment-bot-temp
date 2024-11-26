@@ -127,7 +127,7 @@ async def ban_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         telegram_user_ids = [entry["telegram_user_id"] for entry in data]
 
         for id in telegram_user_ids:
-            await kick_user(id, context)
+            await kick_user_by_id(id, context)
 
         member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
         await update.message.reply_text(member_count)
@@ -150,6 +150,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def kick_user(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.ban_chat_member(CHANNEL_ID, context.job.name)
     await context.bot.unban_chat_member(CHANNEL_ID, context.job.name)
+
+async def kick_user_by_id(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await context.bot.ban_chat_member(CHANNEL_ID, user_id)
+    await context.bot.unban_chat_member(CHANNEL_ID, user_id)
 
 async def remind_user(context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(int(context.job.name), f"Напоминаем, что ваша подписка на официальный канал ALPHA TEAM истекает через {context.job.data} час(а).", reply_markup=InlineKeyboardMarkup([[
