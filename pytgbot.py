@@ -120,8 +120,6 @@ async def get_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def ban_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.chat.type == update.message.chat.PRIVATE:         
-        # member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
-        # print(member_count)
         with open('a.json', 'r') as file:
             data = json.load(file)
 
@@ -129,12 +127,11 @@ async def ban_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         telegram_user_ids = [int(entry["telegram_user_id"]) for entry in data]
 
         await update.message.reply_text(len(telegram_user_ids))
-        # for row in final_result.data:
-        #     telegram_user_id = int(row["telegram_user_id"])
-        #     await kick_user(telegram_user_id, context)
+        for id in telegram_user_ids:
+            await kick_user(id, context)
 
-        # member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
-        # print(member_count)
+        member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
+        await update.message.reply_text(member_count)
 
 async def get_member_count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.chat.type == update.message.chat.PRIVATE:         
