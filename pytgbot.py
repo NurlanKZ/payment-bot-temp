@@ -117,10 +117,38 @@ async def get_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         with open(file_name, 'rb') as f:
             await context.bot.send_document(update.message.chat.id, f, caption="Scheduled tasks.")
 
+async def ban_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message.chat.type == update.message.chat.PRIVATE:         
+        # member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
+        # print(member_count)
+
+        sub_expiry_time_limit = 1732554000
+
+        # Subquery: Get telegram_user_id values with fewer than 2 occurrences
+        subquery_result = supabase.table("tasks") \
+            .select("telegram_user_id, count(telegram_user_id)") \
+            .group("telegram_user_id") \
+            .having("count(telegram_user_id) < 2") \
+            .execute()
+
+        # Extract IDs from the subquery
+        non_unique_ids = [row["telegram_user_id"] for row in subquery_result.data]
+
+        # Final query: Filter tasks based on the subquery and `sub_expiry_time`
+        final_result = supabase.table("tasks") \
+            .select("*") \
+            .in_("telegram_user_id", non_unique_ids) \
+            .lt("sub_expiry_time", sub_expiry_time_limit) \
+            .execute()
+
+        await update.message.reply_text(len(final_result.data))
+        # member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
+        # print(member_count)
+
 async def get_member_count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.chat.type == update.message.chat.PRIVATE:         
         member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
-        print(member_count)
+        await update.message.reply_text(member_count)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.chat.type == update.message.chat.PRIVATE:
@@ -256,5 +284,6 @@ if __name__ == '__main__':
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_docs))
+    application.add_handler(CommandHandler('banwave', ban_users))
 
     application.run_polling()
