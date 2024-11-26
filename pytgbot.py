@@ -134,14 +134,19 @@ async def ban_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Extract IDs from the subquery
         non_unique_ids = [row["telegram_user_id"] for row in subquery_result.data]
 
-        # Final query: Filter tasks based on the subquery and `sub_expiry_time`
-        final_result = supabase.table("tasks") \
-            .select("*") \
-            .in_("telegram_user_id", non_unique_ids) \
-            .lt("sub_expiry_time", sub_expiry_time_limit) \
-            .execute()
+        await update.message.reply_text(len(non_unique_ids))
 
-        await update.message.reply_text(len(final_result.data))
+        # Final query: Filter tasks based on the subquery and `sub_expiry_time`
+        # final_result = supabase.table("tasks") \
+        #     .select("*") \
+        #     .in_("telegram_user_id", non_unique_ids) \
+        #     .lt("sub_expiry_time", sub_expiry_time_limit) \
+        #     .execute()
+
+        # for row in final_result.data:
+        #     telegram_user_id = int(row["telegram_user_id"])
+        #     await kick_user(telegram_user_id, context)
+
         # member_count = await context.bot.get_chat_member_count(CHANNEL_ID)
         # print(member_count)
 
