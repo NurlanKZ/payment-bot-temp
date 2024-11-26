@@ -124,9 +124,8 @@ async def ban_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             data = json.load(file)
 
         # Extract telegram_user_id values and convert them to integers
-        telegram_user_ids = [int(entry["telegram_user_id"]) for entry in data]
+        telegram_user_ids = [entry["telegram_user_id"] for entry in data]
 
-        await update.message.reply_text(len(telegram_user_ids))
         for id in telegram_user_ids:
             await kick_user(id, context)
 
