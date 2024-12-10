@@ -304,4 +304,31 @@ if __name__ == '__main__':
             application.add_handler(CommandHandler('kickinactive', kick_inactive_users))
             # Schedule to run daily
 application.job_queue.run_repeating(kick_inactive_users, interval=SECONDS_IN_DAY, first=0)
-/kickinactive
+async def kick_expired_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kick all users whose subscriptions have expired based on timestamps."""
+    if update.message.chat.type == 'private' and str(update.message.from_user.id) in ADMIN_IDS:
+        # Query the tasks table for users with expired subscriptions
+        current_timestamp = int(datetime.now().timestamp())
+        response = supabase.table("tasks").select("telegram_user_id", "sub_expiry_time").execute()
+
+        expired_users = [
+            task for task in response.data if task["sub_expiry_time"] <= current_timestamp
+        ]
+
+        if not expired_users:
+            await update.message.reply_text("No users with expired subscriptions found.")
+            return
+
+        # Kick all users with expired subscriptions
+        kicked_users = []
+        for task in expired_users:
+            user_id = int(task["telegram_user_id"])
+            await kick_user_by_id(user_id, context)
+            kicked_users.append(user_id)
+
+            # Optionally remove them from the tasks table
+            supabase.table("tasks").delete().match({"telegram_user_id": task["telegram_user_id"]}).execute()
+
+        # Notify admin about kicked users
+        kicked_count = len(kicked_users)
+        await update.message.reply_text(f"Kicked {kicked_count} user(s) with expired subscriptions.")
