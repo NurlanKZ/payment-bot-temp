@@ -277,3 +277,27 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_docs))
     application.add_handler(CommandHandler('banwave', ban_users))
     application.add_handler(CommandHandler('kickinactive', kick_inactive_users))
+    async def kick_inactive_users(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kick users who haven't made a purchase in the last 31 days."""
+    # Get the current timestamp
+    current_timestamp = int(datetime.now().timestamp())
+    threshold_timestamp = current_timestamp - (31 * SECONDS_IN_DAY)
+
+    # Query users whose subscription expired more than 31 days ago
+    response = supabase.table("tasks").select("telegram_user_id", "sub_expiry_time").execute()
+    if response.data:
+        for task in response.data:
+            if task["sub_expiry_time"] < threshold_timestamp:
+                user_id = int(task["telegram_user_id"])
+                await kick_user_by_id(user_id, context)
+
+                # Optionally, remove the user from the tasks table
+                supabase.table("tasks").delete().match({"telegram_user_id": task["telegram_user_id"]}).execute()
+
+    # Optional: Notify admin about the kicked users
+    admin_message = f"Inactive users kicked successfully (31+ days since last purchase)."
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(chat_id=admin_id, text=admin_message)
+        except Exception as e:
+            print(f"Error notifying admin {admin_id}: {e}")
