@@ -145,3 +145,39 @@ if __name__ == "__main__":
 
     # Run the bot
     application.run_polling()
+# Ensure all functions are defined before adding handlers
+async def kick_inactive_users(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kick users who haven't made a purchase in the last 31 days."""
+    current_timestamp = int(datetime.now().timestamp())
+    threshold_timestamp = current_timestamp - (31 * SECONDS_IN_DAY)
+
+    response = supabase.table("tasks").select("telegram_user_id", "sub_expiry_time").execute()
+    if response.data:
+        for task in response.data:
+            if task["sub_expiry_time"] < threshold_timestamp:
+                user_id = int(task["telegram_user_id"])
+                await kick_user_by_id(user_id, context)
+
+                # Remove from the database
+                supabase.table("tasks").delete().match({"telegram_user_id": task["telegram_user_id"]}).execute()
+
+    # Notify admins
+    admin_message = "Inactive users kicked successfully (31+ days since last purchase)."
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(chat_id=admin_id, text=admin_message)
+        except Exception as e:
+            print(f"Error notifying admin {admin_id}: {e}")
+
+# Place the handler assignments AFTER defining all functions
+if __name__ == "__main__":
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Add handlers AFTER defining all functions
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    application.add_handler(CommandHandler("kickinactive", kick_inactive_command))
+    application.add_handler(CommandHandler("kickoneday", kick_one_day_pass_command))
+
+    # Run the bot
+    application.run_polling()
