@@ -276,5 +276,4 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_docs))
     application.add_handler(CommandHandler('banwave', ban_users))
-
-    application.run_polling()
+    application.add_handler(CommandHandler('kickinactive', kick_inactive_users))
