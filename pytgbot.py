@@ -301,3 +301,4 @@ if __name__ == '__main__':
             await context.bot.send_message(chat_id=admin_id, text=admin_message)
         except Exception as e:
             print(f"Error notifying admin {admin_id}: {e}")
+            application.add_handler(CommandHandler('kickinactive', kick_inactive_users))
