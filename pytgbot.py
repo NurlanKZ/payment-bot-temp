@@ -332,3 +332,4 @@ async def kick_expired_users(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Notify admin about kicked users
         kicked_count = len(kicked_users)
         await update.message.reply_text(f"Kicked {kicked_count} user(s) with expired subscriptions.")
+        application.add_handler(CommandHandler('kickexpired', kick_expired_users))
