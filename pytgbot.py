@@ -306,5 +306,5 @@ if __name__ == '__main__':
             for admin_id in ADMIN_IDS:
                 try:
                     await context.bot.send_message(chat_id=admin_id, text=admin_message)
-            except Exception as e:
+                except Exception as e:
                     print(f"Error notifying admin {admin_id}: {e}")
