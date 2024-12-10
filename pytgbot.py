@@ -304,3 +304,4 @@ if __name__ == '__main__':
             application.add_handler(CommandHandler('kickinactive', kick_inactive_users))
             # Schedule to run daily
 application.job_queue.run_repeating(kick_inactive_users, interval=SECONDS_IN_DAY, first=0)
+/kickinactive
