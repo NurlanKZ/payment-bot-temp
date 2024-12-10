@@ -277,6 +277,63 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_docs))
     application.add_handler(CommandHandler('banwave', ban_users))
     application.add_handler(CommandHandler('kickinactive', kick_inactive_users))
+from datetime import datetime, timedelta
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+# Constants
+BOT_TOKEN = "your-bot-token"
+ADMIN_IDS = ["admin_id_1", "admin_id_2"]
+SECONDS_IN_DAY = 86400
+
+# Define the kick function
+async def kick_user_by_id(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kick a user by Telegram user ID."""
+    await context.bot.ban_chat_member(CHANNEL_ID, user_id)
+    await context.bot.unban_chat_member(CHANNEL_ID, user_id)
+
+# Define the function to kick inactive users
+async def kick_inactive_users(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kick users who haven't made a purchase in the last 31 days."""
+    current_timestamp = int(datetime.now().timestamp())
+    threshold_timestamp = current_timestamp - (31 * SECONDS_IN_DAY)
+
+    # Query users
+    response = supabase.table("tasks").select("telegram_user_id", "sub_expiry_time").execute()
+
+    if response.data:
+        kicked_users = []
+        for task in response.data:
+            if task["sub_expiry_time"] < threshold_timestamp:
+                user_id = int(task["telegram_user_id"])
+                await kick_user_by_id(user_id, context)
+                kicked_users.append(user_id)
+
+                # Remove user from the tasks table
+                supabase.table("tasks").delete().match({"telegram_user_id": task["telegram_user_id"]}).execute()
+
+        # Notify admins
+        admin_message = (
+            f"Kicked {len(kicked_users)} inactive users (31+ days since last purchase)."
+            if kicked_users
+            else "No inactive users to kick."
+        )
+        for admin_id in ADMIN_IDS:
+            try:
+                await context.bot.send_message(chat_id=admin_id, text=admin_message)
+            except Exception as e:
+                print(f"Error notifying admin {admin_id}: {e}")
+
+# Main script
+if __name__ == '__main__':
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Add the command handler
+    application.add_handler(CommandHandler('kickinactive', kick_inactive_users))
+
+    # Schedule the task
+    application.job_queue.run_repeating(kick_inactive_users, interval=SECONDS_IN_DAY, first=0)
+
+    application.run_polling()
     async def kick_inactive_users(context: ContextTypes.DEFAULT_TYPE) -> None:
         """Kick users who haven't made a purchase in the last 31 days."""
         # Get the current timestamp
